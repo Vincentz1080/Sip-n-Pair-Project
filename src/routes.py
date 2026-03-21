@@ -9,7 +9,7 @@ from flask import render_template, request
 
 # Load dataset once
 basedir = os.path.dirname(os.path.abspath(__file__))
-dataset_path = os.path.join(basedir, 'dataset.csv.gz')
+dataset_path = os.path.join(basedir, 'compact_dataset.csv')
 df = pd.read_csv(dataset_path)
 
 # Create a list of symptoms (excluding the 'diseases' column)
@@ -40,13 +40,11 @@ def json_search(query):
     disease_matrix = df.iloc[:, 1:].values
     scores = disease_matrix.dot(user_vec_np)
     
-    # Group by disease and take max score (since Kaggle dataset has multiple rows per illness)
+    # 3. Filter and rank illnesses
     df_scored = df.copy()
     df_scored['score'] = scores
-    disease_scores = df_scored.groupby('diseases')['score'].max().reset_index()
     
-    # 3. Filter and rank illnesses
-    top_results = disease_scores[disease_scores['score'] > 0].sort_values(by='score', ascending=False).head(10)
+    top_results = df_scored[df_scored['score'] > 0].sort_values(by='score', ascending=False).head(10)
     
     matches = []
     for _, row in top_results.iterrows():
