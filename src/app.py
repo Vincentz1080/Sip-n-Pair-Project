@@ -1,36 +1,51 @@
-import json
-import os
-from dotenv import load_dotenv
-from flask import Flask
-
-load_dotenv()
-from flask_cors import CORS
-from models import db, Episode, Review
-from routes import register_routes
-
-# Get the directory of the current script
-current_directory = os.path.dirname(os.path.abspath(__file__))
+from flask import Flask, render_template, request, jsonify
+from search import (search_wines, extract_flavors,
+                    get_complementary_ingredients,
+                    search_foods, explain_svd)
+import traceback
 
 app = Flask(__name__)
-CORS(app)
 
-# Configure SQLite database - using 3 slashes for relative path
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///data.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-# Initialize database with app
-db.init_app(app)
+@app.route('/search', methods=['POST'])
+def search():
+    try:
+        data = request.get_json()
+        query = data.get('query', '').strip()
+        use_svd = data.get('use_svd', True)
 
-# Register routes
-register_routes(app)
+        if not query:
+            return jsonify({'error': 'No query provided'}), 400
 
-# Function to initialize database (just creating tables if needed)
-def init_db():
-    with app.app_context():
-        # Create all tables
-        db.create_all()
+        # Step 1: Search for matched wine profiles
+        wines = search_wines(query, use_svd=use_svd)
+        
+        # Step 2: Bridge it via FlavorDB concepts
+        flavors = extract_flavors(wines)
+        ingredients = get_complementary_ingredients(flavors)
+        
+        # Step 3: Match actual food recipes
+        foods = search_foods(ingredients)
+        
+        # Explainability metrics if using SVD
+        svd_info = explain_svd(query) if use_svd else None
 
-init_db()
+        return jsonify({
+            'wines': wines[['title', 'variety', 'description', 'score']]
+                          .head(5).to_dict('records'),
+            'flavors': flavors,
+            'ingredients': ingredients,
+            'foods': foods[['name', 'description', 'score']]
+                          .head(8).to_dict('records'),
+            'svd': svd_info
+        })
+    except Exception as e:
+        print(f"Error in /search: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, host="0.0.0.0", port=5001)
+    app.run(debug=True, port=8000)
