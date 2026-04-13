@@ -17,6 +17,8 @@ WORKDIR $CONTAINER_HOME
 COPY --from=python-deps /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
 
 COPY requirements.txt $CONTAINER_HOME/requirements.txt
+COPY *.pkl $CONTAINER_HOME/
+COPY *_clean.csv $CONTAINER_HOME/
 COPY src/ $CONTAINER_HOME/
 
 CMD ["python", "-m", "gunicorn", "app:app", "--bind", "0.0.0.0:5000", "--log-level", "debug"]
