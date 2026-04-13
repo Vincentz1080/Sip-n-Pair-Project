@@ -425,6 +425,18 @@
         </div>
 
         <div id="results" style="display:none;">
+            
+            <!-- Hero Results: Recipes -->
+            <div class="section-block" style="margin-bottom: 60px;">
+                <h2 style="font-size: 2rem; color: #fff;">Recommended Pairings</h2>
+                <p>High-scoring dishes structurally mapped to your wine's flavor profile.</p>
+                <div id="foods" class="grid-layout" style="margin-top: 24px;"></div>
+            </div>
+
+            <div style="border-top: 1px solid var(--border); margin: 50px 0;"></div>
+
+            <h3 style="margin-bottom: 30px; color: var(--text-muted); font-weight: 500; font-size: 1.2rem;">IR Pipeline Breakdown & Diagnostics</h3>
+
             <div class="grid-layout">
                 
                 <!-- Left Hand Processing Pipeline -->
@@ -453,12 +465,6 @@
                         <h2>SVD Dimensions Activated</h2>
                         <p>These are the dominant semantic axes defining your query structure.</p>
                         <div id="svd-section"></div>
-                    </div>
-
-                    <div class="section-block">
-                        <h2>Recommended Recipes</h2>
-                        <p>High-scoring paired dishes originating from the Food.com dataset.</p>
-                        <div id="foods"></div>
                     </div>
                 </div>
                 
