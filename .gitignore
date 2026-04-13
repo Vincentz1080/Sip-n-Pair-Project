@@ -24,8 +24,5 @@ json_template/
 # Ignore raw dataset since we use gzip version
 dataset.csv
 
-# Ignore large datasets and generated indexes for P04 milestone
+# Ignore raw datasets but permit the processed indexes
 data/
-*.pkl
-wine_clean.csv
-food_clean.csv

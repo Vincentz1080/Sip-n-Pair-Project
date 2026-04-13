@@ -47,8 +47,8 @@ def main():
         print(f"Dim {i}: {top}")
 
     # --- Food Index ---
-    print("\nProcessing food recipes (loading first 100k rows to optimize memory)...")
-    food_df = pd.read_csv('data/food_recipes.csv', nrows=100000).dropna(subset=['name'])
+    print("\nProcessing food recipes (loading first 40k rows to optimize memory)...")
+    food_df = pd.read_csv('data/food_recipes.csv', nrows=40000).dropna(subset=['name'])
     food_df = food_df.reset_index(drop=True)
     food_df['text'] = (food_df['name'].fillna('') + ' ' +
                        food_df['ingredients'].fillna('') + ' ' +
