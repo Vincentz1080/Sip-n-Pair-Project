@@ -430,6 +430,22 @@
             <div class="section-block" style="margin-bottom: 60px;">
                 <h2 style="font-size: 2rem; color: #fff;">Recommended Pairings</h2>
                 <p>High-scoring dishes structurally mapped to your wine's flavor profile.</p>
+
+                <!-- RAG Section -->
+                <div id="rag-container" style="margin: 24px 0;">
+                    <button id="rag-btn" onclick="generateExplanation()" style="background: var(--surface-hover); color: var(--text-main); border: 1px solid var(--border); padding: 10px 20px; box-shadow: none; display: flex; align-items: center; gap: 8px;">
+                        ✨ Generate AI Pairing Explanation
+                    </button>
+                    <div id="rag-loading" style="display: none; align-items: center; gap: 12px; color: var(--text-muted); margin-top: 16px;">
+                        <div class="spinner" style="width: 24px; height: 24px; border-width: 3px;"></div>
+                        <span>Sommelier is thinking...</span>
+                    </div>
+                    <div id="rag-output" style="display: none; background: rgba(225, 29, 72, 0.05); border: 1px solid rgba(225, 29, 72, 0.2); border-radius: 12px; padding: 24px; margin-top: 16px;">
+                        <h3 style="color: var(--primary); margin-bottom: 12px; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">✨ AI Pairing Explanation</h3>
+                        <div id="rag-text" style="color: var(--text-main); font-size: 0.95rem; white-space: pre-wrap; line-height: 1.6;"></div>
+                    </div>
+                </div>
+
                 <div id="foods" class="grid-layout" style="margin-top: 24px;"></div>
             </div>
 
@@ -460,6 +476,9 @@
     </main>
 
 <script>
+let currentSearchData = null;
+let currentQuery = "";
+
 async function search() {
     const query = document.getElementById('query').value.trim();
     const use_svd = document.getElementById('svd').checked;
@@ -482,6 +501,13 @@ async function search() {
         
         if (!res.ok) throw new Error('API Request Failed');
         const data = await res.json();
+        
+        currentSearchData = data;
+        currentQuery = query;
+        
+        // Reset RAG UI
+        document.getElementById('rag-output').style.display = 'none';
+        document.getElementById('rag-btn').style.display = 'inline-flex';
 
         // 1. Populate Wines
         const useSvd = data.svd;
@@ -510,7 +536,7 @@ async function search() {
         // 5. Populate Resulting Food Recipes
         document.getElementById('foods').innerHTML = data.foods.length ? 
             data.foods.map(f => `
-            <div class="card">
+            <div class="card food-card" data-name="${f.name.toLowerCase()}">
                 <b style="color:var(--text-main)">${f.name.replace(/\b\w/g, c => c.toUpperCase())}</b>
                 ${f.description ? `<p>${f.description}</p>` : ''}
                 <span class="score">Pairing Confidence: ${(f.score * 100).toFixed(2)}%</span>
@@ -596,6 +622,75 @@ async function explainMatch(wineIdx, btnEl) {
         btnEl.innerText = 'Why this match?';
     } finally {
         btnEl.disabled = false;
+    }
+}
+
+async function generateExplanation() {
+    if (!currentSearchData) return;
+    
+    document.getElementById('rag-btn').style.display = 'none';
+    document.getElementById('rag-loading').style.display = 'flex';
+    document.getElementById('rag-output').style.display = 'none';
+    
+    try {
+        const payload = {
+            query: currentQuery,
+            wines: currentSearchData.wines,
+            flavors: currentSearchData.flavors,
+            ingredients: currentSearchData.ingredients,
+            foods: currentSearchData.foods
+        };
+        
+        const res = await fetch('/rag', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        
+        if (!res.ok) throw new Error('RAG request failed');
+        const data = await res.json();
+        const explanation = data.explanation;
+        
+        // Display the explanation
+        document.getElementById('rag-text').innerText = explanation;
+        document.getElementById('rag-output').style.display = 'block';
+        
+        // Parse and update food descriptions
+        const lines = explanation.split('\\n');
+        const dishUpdates = {};
+        
+        lines.forEach(line => {
+            const match = line.match(/-\\s*\\*\\*([^\\*]+)\\*\\*\\s*:\\s*(.+)/);
+            if (match) {
+                const dishName = match[1].trim().toLowerCase();
+                const description = match[2].trim();
+                dishUpdates[dishName] = description;
+            }
+        });
+        
+        // Update DOM for each food card
+        const foodCards = document.querySelectorAll('.food-card');
+        foodCards.forEach(card => {
+            const titleText = card.getAttribute('data-name');
+            if (dishUpdates[titleText]) {
+                let descEl = card.querySelector('p');
+                if (!descEl) {
+                    descEl = document.createElement('p');
+                    card.querySelector('b').after(descEl);
+                }
+                descEl.innerText = dishUpdates[titleText];
+                // Subtle visual cue for AI description
+                descEl.style.borderLeft = '2px solid var(--primary)';
+                descEl.style.paddingLeft = '10px';
+            }
+        });
+        
+    } catch(err) {
+        alert("Failed to generate AI explanation.");
+        console.error(err);
+        document.getElementById('rag-btn').style.display = 'inline-flex';
+    } finally {
+        document.getElementById('rag-loading').style.display = 'none';
     }
 }
 </script>
