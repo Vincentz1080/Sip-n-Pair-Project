@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, jsonify
 from search import (search_wines, extract_flavors,
                     get_complementary_ingredients,
-                    search_foods, explain_svd)
+                    search_foods)
 import traceback
 
 app = Flask(__name__)
@@ -30,22 +30,29 @@ def search():
         # Step 3: Match actual food recipes
         foods = search_foods(ingredients)
         
-        # Explainability metrics if using SVD
-        svd_info = explain_svd(query) if use_svd else None
-
         return jsonify({
-            'wines': wines[['title', 'variety', 'description', 'score']]
+            'wines': wines[['idx', 'title', 'variety', 'description', 'score']]
                           .head(5).to_dict('records'),
             'flavors': flavors,
             'ingredients': ingredients,
             'foods': foods[['name', 'description', 'score']]
                           .head(8).to_dict('records'),
-            'svd': svd_info
+            'svd': use_svd
         })
     except Exception as e:
         print(f"Error in /search: {e}")
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
+@app.route('/explain', methods=['POST'])
+def explain():
+    data = request.get_json()
+    query = data.get('query')
+    wine_idx = int(data.get('wine_idx'))
+
+    from search import get_result_explanation
+    explanation = get_result_explanation(query, wine_idx)
+    return jsonify(explanation)
 
 if __name__ == '__main__':
     app.run(debug=True, port=8000)

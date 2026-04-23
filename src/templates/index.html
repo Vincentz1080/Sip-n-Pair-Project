@@ -437,37 +437,24 @@
 
             <h3 style="margin-bottom: 30px; color: var(--text-muted); font-weight: 500; font-size: 1.2rem;">IR Pipeline Breakdown & Diagnostics</h3>
 
+            <!-- Left Hand Processing Pipeline -->
+            <div class="section-block">
+                <h2>Matched Wine Profiles</h2>
+                <p>Closest neighbors located from within the Wine Enthusiast database.</p>
+                <div id="wines"></div>
+            </div>
+
             <div class="grid-layout">
-                
-                <!-- Left Hand Processing Pipeline -->
-                <div>
-                    <div class="section-block">
-                        <h2>Matched Wine Profiles</h2>
-                        <p>Closest neighbors located from within the Wine Enthusiast database.</p>
-                        <div id="wines"></div>
-                    </div>
-
-                    <div class="section-block">
-                        <h2>Detected Flavors</h2>
-                        <div id="flavors" class="tags-container"></div>
-                    </div>
-
-                    <div class="section-block">
-                        <h2>Bridging Ingredients</h2>
-                        <p>Ingredient vectors projected via FlavorDB cross-reference.</p>
-                        <div id="ingredients" class="tags-container"></div>
-                    </div>
+                <div class="section-block">
+                    <h2>Detected Flavors</h2>
+                    <div id="flavors" class="tags-container"></div>
                 </div>
 
-                <!-- Right Hand Outcomes & Explainability -->
-                <div>
-                    <div class="section-block">
-                        <h2>SVD Dimensions Activated</h2>
-                        <p>These are the dominant semantic axes defining your query structure.</p>
-                        <div id="svd-section"></div>
-                    </div>
+                <div class="section-block">
+                    <h2>Bridging Ingredients</h2>
+                    <p>Ingredient vectors projected via FlavorDB cross-reference.</p>
+                    <div id="ingredients" class="tags-container"></div>
                 </div>
-                
             </div>
         </div>
     </main>
@@ -497,12 +484,17 @@ async function search() {
         const data = await res.json();
 
         // 1. Populate Wines
+        const useSvd = data.svd;
         document.getElementById('wines').innerHTML = data.wines.map(w => `
             <div class="card">
                 <b>${w.title || 'Unknown Wine'}</b>
                 <span style="font-size:0.85rem; color:var(--text-muted); display:block; margin-bottom:12px;">${w.variety || 'Unknown Blend'}</span>
                 <p>"${w.description || ''}"</p>
-                <span class="score">Match Score: ${(w.score * 100).toFixed(2)}%</span>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
+                    <span class="score">Match Score: ${(w.score * 100).toFixed(2)}%</span>
+                    ${useSvd ? `<button style="padding: 6px 12px; font-size: 0.85rem; background: transparent; border: 1px solid var(--primary); color: var(--primary); box-shadow: none;" onclick="explainMatch(${w.idx}, this)">Why this match?</button>` : ''}
+                </div>
+                <div class="explanation-panel" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);"></div>
             </div>`).join('');
 
         // 2. Populate Flavors
@@ -513,41 +505,7 @@ async function search() {
         document.getElementById('ingredients').innerHTML = data.ingredients.length ? 
             data.ingredients.map(i => `<span class="tag">${i}</span>`).join('') : '<p style="color:var(--text-muted)">No bridging ingredients found.</p>';
 
-        // 4. SVD Explainability Rubric Section
-        if (data.svd) {
-            let svdHTML = '<h4>Positively Activated Dimensions</h4>';
-            data.svd.positive.forEach(d => {
-                const termsHtml = d.terms.map(t => `<span>${t}</span>`).join('');
-                svdHTML += `
-                <div class="svd-dim">
-                    <div class="svd-header">
-                        <span class="svd-title">Latent Dimension ${d.dim}</span>
-                        <span class="svd-val val-pos">+ ${d.value.toFixed(4)}</span>
-                    </div>
-                    <div class="svd-terms">Base terms: ${termsHtml}</div>
-                </div>`;
-            });
-            
-            svdHTML += '<h4>Negatively Activated Dimensions</h4>';
-            data.svd.negative.forEach(d => {
-                const termsHtml = d.terms.map(t => `<span>${t}</span>`).join('');
-                svdHTML += `
-                <div class="svd-dim negative">
-                    <div class="svd-header">
-                        <span class="svd-title">Latent Dimension ${d.dim}</span>
-                        <span class="svd-val val-neg">${d.value.toFixed(4)}</span>
-                    </div>
-                    <div class="svd-terms">Base terms: ${termsHtml}</div>
-                </div>`;
-            });
-            document.getElementById('svd-section').innerHTML = svdHTML;
-        } else {
-            document.getElementById('svd-section').innerHTML = `
-                <div class="card" style="border-left: 4px solid var(--text-muted); background: rgba(255,255,255,0.02)">
-                    <b style="color:var(--text-muted)">SVD Dimensionality Reduction Disabled</b>
-                    <p style="margin-bottom:0">Standard TF-IDF vector parsing is being routed directly. Toggle on the SVD parameter above to retrieve latent semantic metrics across dimensions.</p>
-                </div>`;
-        }
+
 
         // 5. Populate Resulting Food Recipes
         document.getElementById('foods').innerHTML = data.foods.length ? 
@@ -566,6 +524,78 @@ async function search() {
         console.error(err);
     } finally {
         document.getElementById('loading').style.display = 'none';
+    }
+}
+
+async function explainMatch(wineIdx, btnEl) {
+    const query = document.getElementById('query').value.trim();
+    const panel = btnEl.parentElement.nextElementSibling;
+    
+    if (panel.style.display === 'block') {
+        panel.style.display = 'none';
+        btnEl.innerText = 'Why this match?';
+        return;
+    }
+    
+    btnEl.innerText = 'Loading...';
+    btnEl.disabled = true;
+
+    try {
+        const res = await fetch('/explain', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({query, wine_idx: wineIdx})
+        });
+        
+        if (!res.ok) throw new Error('Failed to get explanation');
+        const data = await res.json();
+        
+        let html = '<div style="margin-bottom: 12px; font-size: 0.9rem; color: var(--text-muted);">How your query aligns with this wine in SVD space:</div>';
+        
+        if (data.positive && data.positive.length > 0) {
+            html += '<div style="margin-bottom: 8px;"><strong style="color: var(--success); font-size: 0.85rem; text-transform: uppercase;">Positive Alignment</strong></div>';
+            data.positive.forEach(d => {
+                html += `
+                <div style="background: rgba(16, 185, 129, 0.05); border-left: 2px solid var(--success); padding: 8px 12px; margin-bottom: 8px; font-size: 0.85rem; border-radius: 4px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span>Dimension ${d.dim}</span>
+                        <span style="color: var(--success); font-family: monospace;">+${d.contribution.toFixed(4)}</span>
+                    </div>
+                    <div style="color: var(--text-muted); font-size: 0.8rem;">
+                        <div><span style="color: #fff;">High:</span> ${d.description.high.join(', ')}</div>
+                        <div><span style="color: #fff;">Low:</span> ${d.description.low.join(', ')}</div>
+                    </div>
+                </div>`;
+            });
+        }
+        
+        if (data.negative && data.negative.length > 0) {
+            html += '<div style="margin-bottom: 8px; margin-top: 12px;"><strong style="color: var(--negative); font-size: 0.85rem; text-transform: uppercase;">Negative Alignment</strong></div>';
+            data.negative.forEach(d => {
+                html += `
+                <div style="background: rgba(244, 63, 94, 0.05); border-left: 2px solid var(--negative); padding: 8px 12px; margin-bottom: 8px; font-size: 0.85rem; border-radius: 4px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span>Dimension ${d.dim}</span>
+                        <span style="color: var(--negative); font-family: monospace;">${d.contribution.toFixed(4)}</span>
+                    </div>
+                    <div style="color: var(--text-muted); font-size: 0.8rem;">
+                        <div><span style="color: #fff;">High:</span> ${d.description.high.join(', ')}</div>
+                        <div><span style="color: #fff;">Low:</span> ${d.description.low.join(', ')}</div>
+                    </div>
+                </div>`;
+            });
+        }
+        
+        panel.innerHTML = html;
+        panel.style.display = 'block';
+        btnEl.innerText = 'Hide explanation';
+        
+    } catch(err) {
+        alert("Failed to load explanation.");
+        console.error(err);
+        btnEl.innerText = 'Why this match?';
+    } finally {
+        btnEl.disabled = false;
     }
 }
 </script>

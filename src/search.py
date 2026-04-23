@@ -90,25 +90,40 @@ def search_foods(ingredients, top_k=8):
     results['score'] = sims[idx]
     return results
 
-def explain_svd(query, top_n=3):
+def get_result_explanation(query, wine_idx, top_n=3):
     """
-    Returns the most activated SVD latent dimensions (both Positively and Negatively)
-    for grading exposition in the UI.
+    Explains why a specific wine result matched the query.
+    Computes element-wise product of query SVD vector and
+    wine SVD vector to find which dimensions drove the match.
+    Shows both positive and negative contributing dimensions
+    and labels each with terms from both ends of the dimension.
     """
     q_tfidf = wine_vec.transform([clean(query)])
     q_svd = svd_model.transform(q_tfidf)[0]
+    wine_svd_vec = wine_svd[wine_idx]
+
+    # Element-wise product shows per-dimension contribution
+    contributions = q_svd * wine_svd_vec
     terms = wine_vec.get_feature_names_out()
 
-    def dim_terms(dim_idx):
+    def describe_dimension(dim_idx):
         comp = svd_model.components_[dim_idx]
-        return [terms[i] for i in comp.argsort()[-5:][::-1]]
+        high_end = [terms[i] for i in comp.argsort()[-5:][::-1]]
+        low_end  = [terms[i] for i in comp.argsort()[:5]]
+        return {'high': high_end, 'low': low_end}
 
-    top_pos = q_svd.argsort()[-top_n:][::-1]
-    top_neg = q_svd.argsort()[:top_n]
+    top_pos = contributions.argsort()[-top_n:][::-1]
+    top_neg = contributions.argsort()[:top_n]
 
     return {
-        'positive': [{'dim': int(d), 'value': float(q_svd[d]),
-                      'terms': dim_terms(d)} for d in top_pos],
-        'negative': [{'dim': int(d), 'value': float(q_svd[d]),
-                      'terms': dim_terms(d)} for d in top_neg]
+        'positive': [{
+            'dim': int(d),
+            'contribution': float(contributions[d]),
+            'description': describe_dimension(d)
+        } for d in top_pos],
+        'negative': [{
+            'dim': int(d),
+            'contribution': float(contributions[d]),
+            'description': describe_dimension(d)
+        } for d in top_neg]
     }
