@@ -54,5 +54,67 @@ def explain():
     explanation = get_result_explanation(query, wine_idx)
     return jsonify(explanation)
 
+@app.route('/rag', methods=['POST'])
+def rag():
+    from openai import OpenAI
+    import os
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    client = OpenAI(
+        api_key=os.getenv("SPARK_API_KEY"),
+        base_url="https://api.cerebras.ai/v1"
+    )
+
+    data = request.get_json()
+    query       = data.get('query', '')
+    wines       = data.get('wines', [])
+    foods       = data.get('foods', [])
+    flavors     = data.get('flavors', [])
+    ingredients = data.get('ingredients', [])
+
+    wine_context = '\n'.join([
+        f"- {w.get('title','Unknown')} ({w.get('variety','')}): "
+        f"{str(w.get('description',''))[:150]}"
+        for w in wines[:3]
+    ])
+
+    food_context = '\n'.join([
+        f"- {f.get('name','Unknown dish')}"
+        for f in foods[:5]
+    ])
+
+    prompt = f"""A user is drinking a wine they describe as: "{query}"
+
+Our system matched this description to wines like:
+{wine_context}
+
+Detected flavor profile: {', '.join(flavors)}
+Complementary ingredients identified: {', '.join(ingredients[:8])}
+
+Based on this, we are recommending these dishes:
+{food_context}
+
+Please write 3-4 sentences that:
+1. Briefly characterize the wine based on the user's description
+2. Explain why these dishes pair well with this wine style
+3. Highlight the key flavor connections between the wine and food
+4. IMPORTANT: For each dish, provide exactly one sentence describing what it is and why it works, formatted strictly as:
+- **[Dish Name]**: [description]
+
+Keep the tone conversational, like a knowledgeable friend explaining over dinner."""
+
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=600
+        )
+        explanation = response.choices[0].message.content
+        return jsonify({'explanation': explanation})
+    except Exception as e:
+        print(f"Error in /rag: {e}")
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True, port=8000)

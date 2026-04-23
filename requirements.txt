@@ -6,3 +6,4 @@ scipy
 nltk
 python-dotenv
 gunicorn
+openai
