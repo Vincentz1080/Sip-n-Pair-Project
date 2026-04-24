@@ -106,14 +106,16 @@ Keep the tone conversational, like a knowledgeable friend explaining over dinner
 
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b",
+            model="llama3.3-70b",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=600
         )
         explanation = response.choices[0].message.content
         return jsonify({'explanation': explanation})
     except Exception as e:
+        import traceback
         print(f"Error in /rag: {e}")
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
