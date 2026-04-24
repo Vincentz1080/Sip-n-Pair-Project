@@ -35,7 +35,7 @@ def search():
                           .head(5).to_dict('records'),
             'flavors': flavors,
             'ingredients': ingredients,
-            'foods': foods[['name', 'description', 'score']]
+            'foods': foods[['idx', 'name', 'description', 'score']]
                           .head(8).to_dict('records'),
             'svd': use_svd
         })
@@ -53,6 +53,16 @@ def explain():
     from search import get_result_explanation
     explanation = get_result_explanation(query, wine_idx)
     return jsonify(explanation)
+
+@app.route('/explain_food', methods=['POST'])
+def explain_food():
+    data = request.get_json()
+    ingredients = data.get('ingredients', [])
+    food_idx = int(data.get('food_idx'))
+
+    from search import get_food_explanation
+    explanation = get_food_explanation(ingredients, food_idx)
+    return jsonify({'overlap': explanation})
 
 @app.route('/rag', methods=['POST'])
 def rag():

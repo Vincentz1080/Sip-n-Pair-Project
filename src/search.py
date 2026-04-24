@@ -88,6 +88,7 @@ def search_foods(ingredients, top_k=8):
     
     results = food_df.iloc[idx].copy()
     results['score'] = sims[idx]
+    results['idx'] = idx
     return results
 
 def get_result_explanation(query, wine_idx, top_n=3):
@@ -127,3 +128,32 @@ def get_result_explanation(query, wine_idx, top_n=3):
             'description': describe_dimension(d)
         } for d in top_neg]
     }
+
+def get_food_explanation(ingredients, food_idx, top_n=5):
+    """
+    Explains why a food matched the given bridging ingredients.
+    Finds the highest overlapping terms between the query (ingredients) and the food's TF-IDF vector.
+    """
+    if not ingredients:
+        return []
+        
+    query = ' '.join(ingredients)
+    q_vec = food_vec.transform([clean(query)])
+    food_tfidf_vec = food_tfidf[food_idx]
+    
+    # Element-wise product of query tfidf and food tfidf
+    overlap = q_vec.multiply(food_tfidf_vec).toarray()[0]
+    terms = food_vec.get_feature_names_out()
+    
+    # Get indices of non-zero overlap, sorted by highest overlap score
+    top_indices = overlap.argsort()[::-1]
+    
+    explanation = []
+    for i in top_indices[:top_n]:
+        if overlap[i] > 0:
+            explanation.append({
+                'term': terms[i],
+                'contribution': float(overlap[i])
+            })
+            
+    return explanation

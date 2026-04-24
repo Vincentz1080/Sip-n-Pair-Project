@@ -539,7 +539,11 @@ async function search() {
             <div class="card food-card" data-name="${f.name.toLowerCase()}">
                 <b style="color:var(--text-main)">${f.name.replace(/\b\w/g, c => c.toUpperCase())}</b>
                 ${f.description ? `<p>${f.description}</p>` : ''}
-                <span class="score">Pairing Confidence: ${(f.score * 100).toFixed(2)}%</span>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
+                    <span class="score">Pairing Confidence: ${(f.score * 100).toFixed(2)}%</span>
+                    <button style="padding: 6px 12px; font-size: 0.85rem; background: transparent; border: 1px solid var(--primary); color: var(--primary); box-shadow: none;" onclick="explainFood(${f.idx}, this)">Why this dish?</button>
+                </div>
+                <div class="explanation-panel" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);"></div>
             </div>`).join('') : '<p style="color:var(--text-muted)">No optimal food pairs resolved.</p>';
 
         // Render Views
@@ -691,6 +695,58 @@ async function generateExplanation() {
         document.getElementById('rag-btn').style.display = 'inline-flex';
     } finally {
         document.getElementById('rag-loading').style.display = 'none';
+    }
+}
+
+async function explainFood(foodIdx, btnEl) {
+    const panel = btnEl.parentElement.nextElementSibling;
+    
+    if (panel.style.display === 'block') {
+        panel.style.display = 'none';
+        btnEl.innerText = 'Why this dish?';
+        return;
+    }
+    
+    btnEl.innerText = 'Loading...';
+    btnEl.disabled = true;
+
+    try {
+        const payload = {
+            ingredients: currentSearchData.ingredients,
+            food_idx: foodIdx
+        };
+        
+        const res = await fetch('/explain_food', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        
+        if (!res.ok) throw new Error('Failed to get food explanation');
+        const data = await res.json();
+        
+        let html = '<div style="margin-bottom: 12px; font-size: 0.9rem; color: var(--text-muted);">Key bridging ingredients connecting this dish to your wine profile:</div>';
+        
+        if (data.overlap && data.overlap.length > 0) {
+            html += '<div style="display: flex; flex-wrap: wrap; gap: 8px;">';
+            data.overlap.forEach(item => {
+                html += `<span style="background: rgba(225, 29, 72, 0.1); border: 1px solid rgba(225, 29, 72, 0.3); padding: 4px 10px; border-radius: 12px; font-size: 0.85rem; color: #fff;">${item.term}</span>`;
+            });
+            html += '</div>';
+        } else {
+            html += '<div style="color: var(--text-muted); font-size: 0.85rem;">Matched through generic overlap.</div>';
+        }
+        
+        panel.innerHTML = html;
+        panel.style.display = 'block';
+        btnEl.innerText = 'Hide explanation';
+        
+    } catch(err) {
+        alert("Failed to load explanation.");
+        console.error(err);
+        btnEl.innerText = 'Why this dish?';
+    } finally {
+        btnEl.disabled = false;
     }
 }
 </script>
