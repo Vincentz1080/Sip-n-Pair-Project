@@ -66,15 +66,12 @@ def explain_food():
 
 @app.route('/rag', methods=['POST'])
 def rag():
-    from openai import OpenAI
+    from infosci_spark_client import LLMClient
     import os
     from dotenv import load_dotenv
     load_dotenv()
 
-    client = OpenAI(
-        api_key=os.getenv("SPARK_API_KEY"),
-        base_url="https://api.cerebras.ai/v1"
-    )
+    client = LLMClient(api_key=os.getenv("SPARK_API_KEY"))
 
     data = request.get_json()
     query       = data.get('query', '')
@@ -115,12 +112,8 @@ Please write 3-4 sentences that:
 Keep the tone conversational, like a knowledgeable friend explaining over dinner."""
 
     try:
-        response = client.chat.completions.create(
-            model="llama3.3-70b",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=600
-        )
-        explanation = response.choices[0].message.content
+        response = client.chat([{"role": "user", "content": prompt}])
+        explanation = response.get("content")
         return jsonify({'explanation': explanation})
     except Exception as e:
         import traceback

@@ -7,3 +7,4 @@ nltk
 python-dotenv
 gunicorn
 openai
+git+https://github.com/MrPeterss/infosci-spark-client.git
